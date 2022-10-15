@@ -9,10 +9,16 @@ from math import ceil
 from mimetypes import guess_type
 
 import requests
+import js2py
+
+
+
+
 
 
 class AcFun(object):
     def __init__(self):
+        self.context = js2py.EvalJs()
         self.session = requests.session()
         self.LOGIN_URL    = "https://id.app.acfun.cn/rest/web/login/signin"
         self.TOKEN_URL    = "https://member.acfun.cn/video/api/getKSCloudToken"
@@ -22,7 +28,7 @@ class AcFun(object):
         self.C_VIDEO_URL  = "https://member.acfun.cn/video/api/createVideo"
         self.C_DOUGA_URL  = "https://member.acfun.cn/video/api/createDouga"
         self.QINIU_URL    = "https://member.acfun.cn/common/api/getQiniuToken"
-        self.QINIU_UP_URL = "https://upload.qiniup.com/"
+        self.COVER_URL = "https://member.acfun.cn/common/api/getUrlAfterUpload"
         self.IMAGE_URL    = "https://imgs.aixifan.com/"
 
     @staticmethod
@@ -106,8 +112,10 @@ class AcFun(object):
                 "videoKey": video_key,
                 "fileName": filename,
                 "vodType": "ksCloud"
-            }
+            },
+            headers={"origin": "https://member.acfun.cn","referer": "https://member.acfun.cn/upload-video"}
         )
+        print(r.text)
         response = r.json()
         if response["result"] != 0: #  or not response["videoId"]
             self.log(r.text)
@@ -158,13 +166,10 @@ class AcFun(object):
                 data["originalDeclare"] = "1"
             r = self.session.post(
                 url=self.C_DOUGA_URL,
-                data=data
+                data=data,
+                headers={"origin": "https://member.acfun.cn","referer": "https://member.acfun.cn/upload-video"}
             )
-            response = r.json()
-            if response["result"] == 0:
-                self.log(f"视频投稿成功！AC号：{response['dougaId']}")
-            else:
-                self.log(r.text)
+            self.log(f"视频投稿结果！AC号：{r.text}")
         
         self.complete(fragment_count, token)
         add()
@@ -175,28 +180,42 @@ class AcFun(object):
         """
         image_type = guess_type(image_path)[0]
         suffix = image_type.split("/")[-1] if image_type else "jpeg"
-        def get_qiniu_token():
+        def get_qiniu_token(fileName):
+            print(fileName)
             r = self.session.post(
                 url=self.QINIU_URL,
-                json={"headers":{"devicetype":7}}
+                data={"fileName":fileName+".jpeg"}
             )
-            return b64decode(
-                r.json()["info"]["upToken"]
-            ).decode("utf-8").replace("null:", "")
+            print(r.text)
+            return r.json()["info"]["token"]
         f = open(image_path, "rb")
         file_data = f.read()
         f.close()
         file_sha1 = self.calc_sha1(file_data)
-        
-        r = requests.post(
-            url=self.QINIU_UP_URL,
-            data={
-               "key": f"afs/cover/{file_sha1}.{suffix}",
-               "token": get_qiniu_token()
-            },
-            files={
-                "file": file_data,
+        self.context.execute("""
+            function u() {
+                var e, t = 0, n = (new Date).getTime().toString(32);
+                for (e = 0; e < 5; e++)
+                    n += Math.floor(65535 * Math.random()).toString(32);
+                return "o_" + n + (t++).toString(32)
             }
-        )
-        response = r.json()
-        return self.IMAGE_URL + response.get("key")
+
+            """)
+
+        fileName = self.context.u()
+        token = get_qiniu_token(fileName)
+
+
+        # 分块上传 复用上传视频的方法
+        file_size = os.path.getsize(image_path)
+        with open(image_path, "rb") as f:
+            chunk_data = f.read(file_size)
+            self.upload_chunk(chunk_data, 0, token)
+        #上传完成后获得链接
+        r = self.session.post(
+                url=self.COVER_URL,
+                data={"bizFlag": "web-douga-cover","token":token}
+            )
+
+        
+        return r.json()["url"]
