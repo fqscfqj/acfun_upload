@@ -22,13 +22,13 @@ class AcFun(object):
         self.session = requests.session()
         self.LOGIN_URL    = "https://id.app.acfun.cn/rest/web/login/signin"
         self.TOKEN_URL    = "https://member.acfun.cn/video/api/getKSCloudToken"
-        self.FRAGMENT_URL = "https://mediacloud.kuaishou.com/api/upload/fragment"
-        self.COMPLETE_URL = "https://mediacloud.kuaishou.com/api/upload/complete"
+        self.FRAGMENT_URL = "https://upload.kuaishouzt.com/api/upload/fragment"
+        self.COMPLETE_URL = "https://upload.kuaishouzt.com/api/upload/complete"
         self.FINISH_URL   = "https://member.acfun.cn/video/api/uploadFinish"
         self.C_VIDEO_URL  = "https://member.acfun.cn/video/api/createVideo"
         self.C_DOUGA_URL  = "https://member.acfun.cn/video/api/createDouga"
         self.QINIU_URL    = "https://member.acfun.cn/common/api/getQiniuToken"
-        self.COVER_URL = "https://member.acfun.cn/common/api/getUrlAfterUpload"
+        self.COVER_URL    = "https://member.acfun.cn/common/api/getUrlAfterUpload"
         self.IMAGE_URL    = "https://imgs.aixifan.com/"
 
     @staticmethod
@@ -69,31 +69,77 @@ class AcFun(object):
         return response["taskId"], response["token"], response["uploadConfig"]["partSize"]
 
     def upload_chunk(self, block: bytes, fragment_id: int, upload_token: str):
+        # 创建一个新的session用于上传
+        upload_session = requests.Session()
+        # 配置session
+        upload_session.mount('https://', requests.adapters.HTTPAdapter(
+            max_retries=3,
+            pool_connections=10,
+            pool_maxsize=10
+        ))
+        
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Content-Type": "application/octet-stream",
+            "Origin": "https://member.acfun.cn",
+            "Referer": "https://member.acfun.cn/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+        }
+        
         for _ in range(3):
-            r = requests.post(
-                url=self.FRAGMENT_URL,
-                params={
-                    "fragment_id": fragment_id,
-                    "upload_token": upload_token
-                },
-                data=block
-            )
-            if r.json()["result"] == 1:
-                self.log(f"分块{fragment_id+1}上传成功")
-                return
-            else:
-                self.log(f"分块{fragment_id+1}上传失败，重试第{_+1}次", r.text)
+            try:
+                r = upload_session.post(
+                    url=self.FRAGMENT_URL,
+                    params={
+                        "fragment_id": fragment_id,
+                        "upload_token": upload_token
+                    },
+                    data=block,
+                    headers=headers,
+                    timeout=30  # 设置超时时间
+                )
+                if r.json()["result"] == 1:
+                    self.log(f"分块{fragment_id+1}上传成功")
+                    return
+                else:
+                    self.log(f"分块{fragment_id+1}上传失败，重试第{_+1}次", r.text)
+            except Exception as e:
+                self.log(f"分块{fragment_id+1}上传出错，重试第{_+1}次", str(e))
 
     def complete(self, fragment_count: int, upload_token: str):
-        r = requests.post(
-            url=self.COMPLETE_URL,
-            params={
-                "fragment_count": fragment_count,
-                "upload_token": upload_token
-            }
-        )
-        if r.json()["result"] != 1:
-            self.log(r.text)
+        # 创建一个新的session用于上传
+        upload_session = requests.Session()
+        # 配置session
+        upload_session.mount('https://', requests.adapters.HTTPAdapter(
+            max_retries=3,
+            pool_connections=10,
+            pool_maxsize=10
+        ))
+        
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Content-Length": "0",
+            "Origin": "https://member.acfun.cn",
+            "Referer": "https://member.acfun.cn/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+        }
+        
+        try:
+            r = upload_session.post(
+                url=self.COMPLETE_URL,
+                params={
+                    "fragment_count": fragment_count,
+                    "upload_token": upload_token
+                },
+                headers=headers,
+                timeout=30  # 设置超时时间
+            )
+            if r.json()["result"] != 1:
+                self.log(r.text)
+        except Exception as e:
+            self.log(f"完成上传出错: {str(e)}")
     
     def upload_finish(self, taskId: int):
         r = self.session.post(
@@ -211,6 +257,8 @@ class AcFun(object):
         with open(image_path, "rb") as f:
             chunk_data = f.read(file_size)
             self.upload_chunk(chunk_data, 0, token)
+        # 完成上传
+        self.complete(1, token)
         #上传完成后获得链接
         r = self.session.post(
                 url=self.COVER_URL,
