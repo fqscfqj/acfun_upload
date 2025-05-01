@@ -215,7 +215,11 @@ class AcFun(object):
                 data=data,
                 headers={"origin": "https://member.acfun.cn","referer": "https://member.acfun.cn/upload-video"}
             )
-            self.log(f"视频投稿结果！AC号：{r.text}")
+            response = r.json()
+            if response["result"] == 0 and "dougaId" in response:
+                self.log(f"视频投稿成功！AC号：{response['dougaId']}")
+            else:
+                self.log(f"视频投稿结果：{r.text}")
         
         self.complete(fragment_count, token)
         add()
