@@ -81,7 +81,7 @@ python acfun.py ^
 ## 项目结构
 
 ```
-d:\github\acfun_upload/
+acfun_upload/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
