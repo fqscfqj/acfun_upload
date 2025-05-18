@@ -73,7 +73,7 @@ python acfun.py ^
 
 ### 登录与 Cookie
 
-*   脚本首次成功登录后，会将认证信息（Cookie）保存在项目根目录下的 `config/acfun_cookies.txt` 文件中。
+*   `config/acfun_cookies.txt` 文件可以手动创建（包含有效的Cookie信息）或由程序在首次成功登录后自动生成。
 *   后续运行时，脚本会尝试从此文件加载 Cookie。如果 Cookie 有效，则无需再次输入用户名和密码。
 *   如果 Cookie 失效或文件不存在，您需要在命令行中通过 `-u` 和 `-p` 参数提供用户名和密码进行登录。
 *   您可以通过 `--cookie_file` 参数指定其他的 Cookie 文件路径。
@@ -85,14 +85,10 @@ d:\github\acfun_upload/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-├── acfun_upload/                # 主要代码模块
-│   ├── __init__.py
-│   └── acfun.py               # AcFun上传核心逻辑和命令行接口
-├── config/                    # 配置文件目录
-│   └── acfun_cookies.txt      # (自动生成) 存储登录Cookie
-├── requirements.txt           # 项目依赖
-├── Test.mp4                   # (示例) 测试视频文件
-└── Test.png                   # (示例) 测试封面图片
+├── acfun.py                  # AcFun上传核心逻辑和命令行接口
+├── config/                   # 配置文件目录
+│   └── acfun_cookies.txt     # 存储登录Cookie
+├── requirements.txt          # 项目依赖
 ```
 
 ## 注意事项
