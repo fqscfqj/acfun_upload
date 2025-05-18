@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs
+log
+logs
+*.log
+
+# Config files
+config/acfun_cookies.txt
+
+# Test files
+Test.mp4
+test.png
